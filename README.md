@@ -36,3 +36,21 @@ go-layered-architecture/
    - ここでは GET リクエストでユーザーの取得、POST リクエストでユーザーの作成を行う
 5. エントリーポイント (cmd/main.go)
    - 各層のコンポーネントを初期化し、HTTP サーバーのルーティングを設定してサーバーを起動
+
+## cURL
+
+`-i` や `-v` でより詳しく
+
+### ユーザー作成 (POST)
+
+```
+curl -X POST -H "Content-Type: application/json" \
+-d '{"name": "John Doe", "email": "john@example.com"}' \
+http://localhost:8080/users
+```
+
+### ユーザー取得 (GET)
+
+```
+curl -X GET 'http://localhost:8080/users?id=1'
+```
