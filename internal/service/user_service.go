@@ -32,5 +32,6 @@ func (s *userService) GetUser(id int) (*domain.User, error) {
 
 // リポジトリを通じてユーザーを作成
 func (s *userService) CreateUser(user *domain.User) error {
+    // 空じゃないか みたなバリデーションを入れてもいいね
 	return s.repo.Create(user)
 }

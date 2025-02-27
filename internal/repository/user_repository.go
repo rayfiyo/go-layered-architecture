@@ -10,6 +10,38 @@ import (
 	"github.com/rayfiyo/layered/internal/domain"
 )
 
+/*
+// こんな感じで DB の設定を書く仕様の場合もあるだろう
+
+// SQLite を利用したユーザーデータの実装
+type SQLiteUserRepository struct {
+	db *sql.DB
+}
+
+// DB ファイルで SQLiteUserRepository を初期化
+func NewSQLiteUserRepository(dbFile string) (*SQLiteUserRepository, error) {
+	db, err := sql.Open("sqlite3", dbFile)
+	if err != nil {
+		return nil, err
+	}
+
+	// テーブルが存在しない場合は作成
+	query := `
+	CREATE TABLE IF NOT EXISTS users (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT NOT NULL,
+		email TEXT NOT NULL UNIQUE
+	);
+	`
+	_, err = db.Exec(query)
+	if err != nil {
+		return nil, err
+	}
+
+	return &SQLiteUserRepository{db: db}, nil
+}
+*/
+
 // ユーザーデータの取得・保存のためのインターフェース
 type UserRepository interface {
 	GetByID(id int) (*domain.User, error)
