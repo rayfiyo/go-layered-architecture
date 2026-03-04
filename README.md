@@ -3,7 +3,8 @@
 - An example of layered architecture + DDD in Go and notes
 - Go 言語におけるレイヤードアーキテクチャ + DDD の一例とメモ
   - ユーザーの作成と取得の API を実装した
-  - DB 周りは sqlx を用いて実装した
+  - DB 周りは InMemory で実装した
+  - フレームワークは gin を使った
 
 # 関連記事
 
@@ -44,14 +45,15 @@ go-layered-architecture/
 │   │
 │   ├── infrastructure/ // インフラ層：外部技術の実装を担当
 │   │   └── repository/
-│   │       └── user_repository_sqlx.go
+│   │       └── inmemory_user_repository.go
 │   │
-│   └── presentation    // プレゼンテーション層：HTTP リクエスト受付とレスポンス処理を担当
-│       └── handler
-│           ├── router.go
-│           └── user_handler.go
+│   └── presentation/   // プレゼンテーション層：HTTP リクエスト受付とレスポンス処理を担当
+│       └── handler/
+│           ├── user_handler.go
+│           └── router.go
 │
-└── go.mod // Go モジュール定義ファイル
+├── go.mod
+└── go.sum
 ```
 
 以下、実装を行う順に説明する。

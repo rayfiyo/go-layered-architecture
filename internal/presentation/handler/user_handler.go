@@ -1,20 +1,23 @@
 package handler
 
 import (
-	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 
+	"github.com/gin-gonic/gin"
 	"github.com/rayfiyo/go-layered-architecture/internal/application/service"
+	"github.com/rayfiyo/go-layered-architecture/internal/domain"
 )
 
+// UserHandler は HTTP の入出力（プレゼンテーション層）を担当する。
+// gin.Context を受け取り、アプリケーション層（UserService）を呼び出してレスポンスを返す。
 type UserHandler struct {
-	userSvc *service.UserService
+	userService *service.UserService
 }
 
-func NewUserHandler(userSvc *service.UserService) *UserHandler {
-	return &UserHandler{userSvc: userSvc}
+// NewUserHandler は UserHandler を生成する。
+func NewUserHandler(userService *service.UserService) *UserHandler {
+	return &UserHandler{userService: userService}
 }
 
 type createUserRequest struct {
@@ -22,94 +25,57 @@ type createUserRequest struct {
 	Email string `json:"email"`
 }
 
-type errorResponse struct {
-	Error string `json:"error"`
-}
-
-func (h *UserHandler) HandleCreateUser(w http.ResponseWriter, r *http.Request) {
+// CreateUser はユーザー作成 API（POST /users）。
+func (h *UserHandler) CreateUser(c *gin.Context) {
 	var req createUserRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "リクエストボディの形式が不正です"})
 		return
 	}
 
-	out, err := h.userSvc.CreateUser(r.Context(), service.CreateUserInput{
-		Name:  req.Name,
-		Email: req.Email,
-	})
+	user, err := h.userService.CreateUser(c.Request.Context(), req.Name, req.Email)
 	if err != nil {
-		writeServiceError(w, err)
-		return
+		// ドメインの検証エラーは 400 とする。
+		switch err {
+		case domain.ErrInvalidUserName, domain.ErrInvalidUserEmail:
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		default:
+			c.JSON(http.StatusInternalServerError,
+				gin.H{"error": "サーバー内部でエラーが発生しました"})
+			return
+		}
 	}
 
-	writeJSON(w, http.StatusCreated, out)
+	c.JSON(http.StatusCreated, user)
 }
 
-func (h *UserHandler) HandleGetUser(w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Query().Get("id")
+// GetUser はユーザー取得 API（GET /users?id=1）。
+func (h *UserHandler) GetUser(c *gin.Context) {
+	idStr := c.Query("id")
 	if idStr == "" {
-		writeJSON(w, http.StatusBadRequest,
-			errorResponse{Error: "missing query parameter: id"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "クエリパラメータ id は必須です"})
 		return
 	}
 
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil || id <= 0 {
-		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid id"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id は正の整数で指定してください"})
 		return
 	}
 
-	out, err := h.userSvc.GetUserByID(r.Context(), id)
+	user, err := h.userService.GetUser(c.Request.Context(), id)
 	if err != nil {
-		writeServiceError(w, err)
-		return
+		switch err {
+		case service.ErrUserNotFound:
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		default:
+			c.JSON(http.StatusInternalServerError,
+				gin.H{"error": "サーバー内部でエラーが発生しました"})
+			return
+		}
 	}
 
-	writeJSON(w, http.StatusOK, out)
-}
-
-func writeServiceError(w http.ResponseWriter, err error) {
-	// アプリケーション層が wrap した sentinel を文字列で判定せず errors.Is で分類する
-	switch {
-	case errors.Is(err, service.ErrBadRequest):
-		writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})
-	case errors.Is(err, service.ErrNotFound):
-		writeJSON(w, http.StatusNotFound, errorResponse{Error: err.Error()})
-	case errors.Is(err, service.ErrConflict):
-		writeJSON(w, http.StatusConflict, errorResponse{Error: err.Error()})
-	default:
-		writeJSON(w, http.StatusInternalServerError,
-			errorResponse{Error: "internal server error"})
-	}
-}
-
-func decodeJSON(r *http.Request, dst any) error {
-	if r.Body == nil {
-		return errors.New("empty body")
-	}
-	defer func() {
-		_ = r.Body.Close()
-	}()
-
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-
-	if err := dec.Decode(dst); err != nil {
-		return err
-	}
-	// 余分な JSON が続いていないかチェック
-	if dec.More() {
-		return errors.New("invalid json: multiple values")
-	}
-	return nil
-}
-
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(true)
-
-	_ = enc.Encode(v)
+	c.JSON(http.StatusOK, user)
 }

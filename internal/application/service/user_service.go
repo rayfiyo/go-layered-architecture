@@ -3,80 +3,49 @@ package service
 import (
 	"context"
 	"errors"
-	"fmt"
-	"time"
 
 	"github.com/rayfiyo/go-layered-architecture/internal/domain"
-	"github.com/rayfiyo/go-layered-architecture/internal/infrastructure/repository"
 )
 
-var (
-	ErrBadRequest = errors.New("bad request")
-	ErrNotFound   = errors.New("not found")
-	ErrConflict   = errors.New("conflict")
-)
+// ErrUserNotFound はユーザーが存在しない場合のアプリケーション層エラー。
+var ErrUserNotFound = errors.New("ユーザーが見つかりません")
 
+// UserService はユースケース（アプリケーション層）を提供する。
+// ここでは「ユーザー作成」「ユーザー取得」の2つを実装する。
+// アプリケーション層はドメイン層（エンティティ、リポジトリ抽象）に依存する。
 type UserService struct {
 	repo domain.UserRepository
 }
 
+// NewUserService は UserService を生成する。
 func NewUserService(repo domain.UserRepository) *UserService {
 	return &UserService{repo: repo}
 }
 
-type CreateUserInput struct {
-	Name  string
-	Email string
-}
-
-type UserOutput struct {
-	ID        int64     `json:"id"`
-	Name      string    `json:"name"`
-	Email     string    `json:"email"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
+// CreateUser はユーザーを作成するユースケース。
 func (s *UserService) CreateUser(
-	ctx context.Context, in CreateUserInput,
-) (UserOutput, error) {
-	u, err := domain.NewUser(in.Name, in.Email, time.Now())
+	ctx context.Context, name, email string,
+) (*domain.User, error) {
+	user, err := domain.NewUser(name, email)
 	if err != nil {
-		if errors.Is(err, domain.ErrInvalidUserName) ||
-			errors.Is(err, domain.ErrInvalidUserEmail) {
-			return UserOutput{}, fmt.Errorf("%w: %v", ErrBadRequest, err)
-		}
-		return UserOutput{}, err
+		// ドメインの検証エラーはそのまま返す。
+		return nil, err
 	}
 
-	created, err := s.repo.Create(ctx, u)
-	if err != nil {
-		if errors.Is(err, repository.ErrUserEmailConflict) {
-			return UserOutput{}, fmt.Errorf("%w: %v", ErrConflict, err)
-		}
-		return UserOutput{}, err
+	if err := s.repo.Save(ctx, user); err != nil {
+		return nil, err
 	}
-
-	return UserOutput{
-		ID:        created.ID,
-		Name:      created.Name,
-		Email:     created.Email,
-		CreatedAt: created.CreatedAt,
-	}, nil
+	return user, nil
 }
 
-func (s *UserService) GetUserByID(ctx context.Context, id int64) (UserOutput, error) {
-	u, err := s.repo.GetByID(ctx, id)
+// GetUser はユーザーを取得するユースケース。
+func (s *UserService) GetUser(ctx context.Context, id int64) (*domain.User, error) {
+	user, err := s.repo.FindByID(ctx, id)
 	if err != nil {
-		if errors.Is(err, repository.ErrUserNotFound) {
-			return UserOutput{}, fmt.Errorf("%w: %v", ErrNotFound, err)
-		}
-		return UserOutput{}, err
+		return nil, err
 	}
-
-	return UserOutput{
-		ID:        u.ID,
-		Name:      u.Name,
-		Email:     u.Email,
-		CreatedAt: u.CreatedAt,
-	}, nil
+	if user == nil {
+		return nil, ErrUserNotFound
+	}
+	return user, nil
 }
